@@ -1,0 +1,15 @@
+server:
+  port: ":8081"
+
+
+service:
+  name: "order_service"
+
+mongo:
+  string: "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.3.7"
+
+redis:
+  clusterMode: false
+  hosts: "127.0.0.1:6379"
+  db: 1
+
