@@ -3,6 +3,8 @@ package router
 import (
 	"context"
 	"oms_service/orders"
+	// "oms_service/orders/requests"
+
 	// "oms_service/database"
 
 	// "oms_service/redis"
@@ -20,12 +22,13 @@ func Initialize(ctx context.Context, s *http.Server) (err error) {
 	// 		err = ctrlErr
 	// 		return
 	// 	}
-
+	var OrderController *orders.Controller
 	// oms_v1.POST("/create-order",omscontroller.CreateOrder)
 	// oms_v1.POST("/create-bulk",omscontroller.CreateBulkOrder)
 	// oms_v1.GET("/:order_id", private.AuthenticateJWT(), omscontroller.GetOrder)
 	// oms_v1.GET("/orders",omscontroller.GetOrders)
-	oms_v1.GET("/create", orders.CreateOrder)
+	oms_v1.GET("/create", OrderController.CreateOrder)
+
 	return nil
 
 }
