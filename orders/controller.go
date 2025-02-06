@@ -2,6 +2,7 @@ package orders
 
 import (
 	"log"
+	"os"
 	"strconv"
 
 	// "net/http"
@@ -12,8 +13,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	// "github.com/omniful/go_commons/csv"
 	error2 "github.com/omniful/go_commons/error"
 	oresponse "github.com/omniful/go_commons/response"
+	"github.com/omniful/go_commons/sqs"
 	// commonError "github.com/omniful/go_commons/error"
 )
 
@@ -23,6 +26,11 @@ import (
 type Controller struct {
 	// OrderService domain.TenantService
 	OrderService repository.OrderService
+
+}
+type CSVUploadController struct {
+	SQSClient  *sqs.Pool
+	QueueURL   string
 }
 
 func(tc *Controller) CreateOrder(c *gin.Context) {
@@ -53,6 +61,29 @@ func(tc *Controller) CreateOrder(c *gin.Context) {
 	response := convertServiceRespToControllerRespCreateOrder(svcResponse)
 	oresponse.NewSuccessResponse(c, response)
 
+
+}
+func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context){
+	var CreateOrderReq *requests.CSVUploadRequest
+	if err := ctx.ShouldBindJSON(&CreateOrderReq); err != nil {
+		log.Println("Invalid request payload:", err)
+		ctx.JSON(400, gin.H{"error": "Invalid request"})
+		return
+	}
+	if _, err := os.Stat(CreateOrderReq.FilePath); os.IsNotExist(err) {
+		log.Println("File not found:", CreateOrderReq.FilePath)
+		ctx.JSON(400, gin.H{"error": "File does not exist"})
+		return
+	}
+	// Csv, err := csv.NewCommonCSV(
+	// 	csv.WithBatchSize(100),
+	// 	csv.WithSource(csv.Local),
+	// 	csv.WithLocalFileInfo(CreateOrderReq.FilePath),
+	// 	csv.WithHeaderSanitizers(csv.SanitizeAsterisks, csv.SanitizeToLower),
+	// 	csv.WithDataRowSanitizers(csv.SanitizeSpace, csv.SanitizeToLower),
+	// )
+
+	
 
 }
 
