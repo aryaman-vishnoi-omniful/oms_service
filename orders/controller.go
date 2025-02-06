@@ -7,12 +7,16 @@ import (
 
 	// "net/http"
 	// "oms_service/domain"
+	// "oms_service/orders"
+	// "oms_service/orders"
 	"oms_service/orders/requests"
 	"oms_service/orders/responses"
+	"oms_service/orders/services"
 	"oms_service/repository"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+
 	// "github.com/omniful/go_commons/csv"
 	error2 "github.com/omniful/go_commons/error"
 	oresponse "github.com/omniful/go_commons/response"
@@ -22,37 +26,34 @@ import (
 
 // import "oms_service/domain"
 
-
 type Controller struct {
 	// OrderService domain.TenantService
 	OrderService repository.OrderService
-
 }
 type CSVUploadController struct {
-	SQSClient  *sqs.Pool
-	QueueURL   string
+	SQSClient *sqs.Pool
+	QueueURL  string
 }
 
-func(tc *Controller) CreateOrder(c *gin.Context) {
+func (tc *Controller) CreateOrder(c *gin.Context) {
 
 	var createOrderReq *requests.CreateOrderCtrlRequest
-	err:=c.ShouldBind(&createOrderReq)
-	if err!=nil{
+	err := c.ShouldBind(&createOrderReq)
+	if err != nil {
 		// cuserr:=commonError.NewCustomError("Bad Request",err.Error())
 		log.Fatal("bad request")
 		return
 
-
 	}
 	svcRequest, err := convertControllerReqToServiceReqCreateOrder(c, createOrderReq)
-	if err!=nil{
+	if err != nil {
 		// tenantError.NewErrorResponse(c, cusErr
 		log.Fatal(err.Error())
 		return
 	}
 
-	svcResponse, err := tc.OrderService.CreateOrder(c,svcRequest)
-	if err!=nil{
+	svcResponse, err := tc.OrderService.CreateOrder(c, svcRequest)
+	if err != nil {
 		// tenantError.NewErrorResponse(c, cusErr)
 		log.Fatal(err.Error())
 		return
@@ -61,19 +62,22 @@ func(tc *Controller) CreateOrder(c *gin.Context) {
 	response := convertServiceRespToControllerRespCreateOrder(svcResponse)
 	oresponse.NewSuccessResponse(c, response)
 
-
 }
-func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context){
-	var CreateOrderReq *requests.CSVUploadRequest
-	if err := ctx.ShouldBindJSON(&CreateOrderReq); err != nil {
+func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context) {
+	var CSVUploadRequest *requests.CSVUploadRequest
+	if err := ctx.ShouldBindJSON(&CSVUploadRequest); err != nil {
 		log.Println("Invalid request payload:", err)
 		ctx.JSON(400, gin.H{"error": "Invalid request"})
 		return
 	}
-	if _, err := os.Stat(CreateOrderReq.FilePath); os.IsNotExist(err) {
-		log.Println("File not found:", CreateOrderReq.FilePath)
+	if _, err := os.Stat(CSVUploadRequest.FilePath); os.IsNotExist(err) {
+		log.Println("File not found:", CSVUploadRequest.FilePath)
 		ctx.JSON(400, gin.H{"error": "File does not exist"})
 		return
+	}
+	_, err := services.ConvertControllerReqToServiceReqParseCsv(ctx, CSVUploadRequest)
+	if err != nil {
+		log.Fatal("didnt go to service")
 	}
 	// Csv, err := csv.NewCommonCSV(
 	// 	csv.WithBatchSize(100),
@@ -82,8 +86,6 @@ func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context){
 	// 	csv.WithHeaderSanitizers(csv.SanitizeAsterisks, csv.SanitizeToLower),
 	// 	csv.WithDataRowSanitizers(csv.SanitizeSpace, csv.SanitizeToLower),
 	// )
-
-	
 
 }
 
@@ -103,8 +105,8 @@ func convertControllerReqToServiceReqCreateOrder(ctx *gin.Context, createOrderRe
 	if err != nil {
 		return nil, error2.NewCustomError("PARSE_INT_ERROR", err.Error())
 	}
-	if createOrderReq.OrderStatus==""{
-		createOrderReq.OrderStatus="on-hold"
+	if createOrderReq.OrderStatus == "" {
+		createOrderReq.OrderStatus = "on-hold"
 	}
 
 	svcReq = &requests.CreateOrderSvcRequest{
@@ -114,15 +116,13 @@ func convertControllerReqToServiceReqCreateOrder(ctx *gin.Context, createOrderRe
 		ShippingAddress: createOrderReq.ShippingAddress,
 		BillingAddress:  createOrderReq.BillingAddress,
 		// Invoice:         createOrderReq.Invoice,
-		CurrencyType:    createOrderReq.CurrencyType,
-		PaymentMethod:   createOrderReq.PaymentMethod,
-		OrderStatus:     createOrderReq.OrderStatus,
+		CurrencyType:  createOrderReq.CurrencyType,
+		PaymentMethod: createOrderReq.PaymentMethod,
+		OrderStatus:   createOrderReq.OrderStatus,
 	}
 
-	return 
+	return
 }
-
-
 
 func convertServiceRespToControllerRespCreateOrder(resp *responses.CreateOrderSvcResponse) *responses.CreateOrderCtrlResponse {
 	return &responses.CreateOrderCtrlResponse{
@@ -132,9 +132,9 @@ func convertServiceRespToControllerRespCreateOrder(resp *responses.CreateOrderSv
 		ShippingAddress: resp.ShippingAddress,
 		BillingAddress:  resp.BillingAddress,
 		// Invoice:         resp.Invoice,
-		CurrencyType:    resp.CurrencyType,
-		PaymentMethod:   resp.PaymentMethod,
-		OrderStatus:     resp.OrderStatus,
-		CreatedBy:       resp.CreatedBy,
+		CurrencyType:  resp.CurrencyType,
+		PaymentMethod: resp.PaymentMethod,
+		OrderStatus:   resp.OrderStatus,
+		CreatedBy:     resp.CreatedBy,
 	}
 }

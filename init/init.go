@@ -5,13 +5,19 @@ import (
 	"fmt"
 	"log"
 	"oms_service/database"
-	"oms_service/orders"
+
+	// "oms_service/orders"
+	"oms_service/orders/listners"
+	"oms_service/orders/services"
 	"oms_service/redis"
 	"os"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/omniful/go_commons/config"
+	// "github.com/omniful/go_commons/kafka"
+
+	// "github.com/omniful/go_commons/kafka"
 	goredis "github.com/omniful/go_commons/redis"
 	"github.com/omniful/go_commons/sqs"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -35,7 +41,7 @@ if err!=nil{
 func Initialize(ctx context.Context) {
 	InitializeRedis(ctx)
 	InitializeDB(ctx)
-	InitializeKafka(ctx)
+	// InitializeKafka(ctx)
 	InitializeSQS(ctx)
 	// return ctx
 }
@@ -64,7 +70,20 @@ func InitializeDB(ctx context.Context) {
 	database.SetClient(Db)
 }
 
-func InitializeKafka(ctx context.Context) {}
+// func InitializeKafka(ctx context.Context) {
+// 	kafkaBrokers := config.GetStringSlice(ctx, "onlineKafka.brokers")
+// 	kafkaClientID := config.GetString(ctx, "onlineKafka.clientId")
+// 	kafkaVersion := config.GetString(ctx, "onlineKafka.version")
+// 	producer:=kafka.NewProducer(
+// 		kafka.WithBrokers(kafkaBrokers),
+// 		kafka.WithClientID(kafkaClientID),
+// 		kafka.WithKafkaVersion(kafkaVersion),
+
+
+// 	)
+// 	fmt.Println("Initialized kafka producer")
+	
+// }
 
 func InitializeRedis(ctx context.Context) {
 	redis_client:=goredis.NewClient(&goredis.Config{
@@ -83,17 +102,18 @@ func InitializeRedis(ctx context.Context) {
 
 func InitializeSQS(ctx context.Context){
 	SQSconfig:=sqs.GetSQSConfig(ctx,false,"order","eu-north-1",os.Getenv("AWS_ACCOUNT"),"")
-	// queue_url,err:=sqs.GetUrl(ctx,SQSconfig,"samplequeue.fifo")
-	// if err!=nil{
-	// 	log.Fatal("cant get url")
-	// }
+	queue_url,err:=sqs.GetUrl(ctx,SQSconfig,"samplequeue.fifo")
+	if err!=nil{
+		log.Fatal("cant get url")
+	}
 	// log.Printf("Successfully initialized SQS. Queue URL: %s", *queue_url)
 	Queue_instance,err:=sqs.NewFifoQueue(ctx,"samplequeue.fifo",SQSconfig)
 	if err!=nil{
 		log.Fatal("cant create queue instance")
 	}
 	// fmt.Println(Queue_instance,*Queue_instance.Url)
-	orders.SetProducer(ctx,Queue_instance)
+	services.SetProducer(ctx,Queue_instance)
+	go listners.StartConsume(*queue_url,ctx)
 
 
 

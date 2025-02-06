@@ -31,12 +31,13 @@ func Initialize(ctx context.Context, s *http.Server) (err error) {
 	// 		err = ctrlErr
 	// 		return
 	// 	}
-	var OrderController *orders.Controller
+	// var OrderController *orders.Controller
+	var CSVUploadController *orders.CSVUploadController
 	// oms_v1.POST("/create-order",omscontroller.CreateOrder)
 	// oms_v1.POST("/create-bulk",omscontroller.CreateBulkOrder)
 	// oms_v1.GET("/:order_id", private.AuthenticateJWT(), omscontroller.GetOrder)
 	// oms_v1.GET("/orders",omscontroller.GetOrders)
-	oms_v1.POST("/create", OrderController.CreateOrder)
+	oms_v1.POST("/create", CSVUploadController.CreateBulkCsv)
 	// oms_v1.POST("/create-bulkorder", OrderController.CreateBulkCsv)
 
 	return nil
