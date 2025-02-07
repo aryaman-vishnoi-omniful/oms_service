@@ -105,15 +105,17 @@ func InitializeRedis(ctx context.Context) {
 
 func InitializeSQS(ctx context.Context){
 	SQSconfig:=sqs.GetSQSConfig(ctx,false,"order","eu-north-1",os.Getenv("AWS_ACCOUNT"),"")
-	queue_url,err:=sqs.GetUrl(ctx,SQSconfig,"samplequeue.fifo")
+	queue_url,err:=sqs.GetUrl(ctx,SQSconfig,"sqsQueue")
 	if err!=nil{
 		log.Fatal("cant get url")
 	}
 	// log.Printf("Successfully initialized SQS. Queue URL: %s", *queue_url)
-	Queue_instance,err:=sqs.NewFifoQueue(ctx,"samplequeue.fifo",SQSconfig)
+	Queue_instance,err:=sqs.NewStandardQueue(ctx,"sqsQueue",SQSconfig)
 	if err!=nil{
 		log.Fatal("cant create queue instance")
 	}
+	fmt.Println(queue_url)
+	fmt.Println(Queue_instance)
 	// fmt.Println(Queue_instance,*Queue_instance.Url)
 	services.SetProducer(ctx,Queue_instance)
 	go listners.StartConsume(*queue_url,ctx)
@@ -132,8 +134,9 @@ func InitializeKafka(ctx context.Context) {
 		kafka.WithClientID(kafkaClientID),
 		kafka.WithKafkaVersion(kafkaVersion),
 	)
-	// fmt.Println("Initialized kafka producer")
+	// fmt.Println("Initialized kafka producer").
 	fmt.Println("Initialized Kafka Producer")
 	kafka_producer.Set(producer)
+	go listners.StartConsumer(ctx)
 
 }

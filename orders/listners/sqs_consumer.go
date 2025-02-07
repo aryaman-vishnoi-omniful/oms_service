@@ -27,7 +27,7 @@ func StartConsume(queuestring string,ctx context.Context) {
 		recieveMessages := &sqs.ReceiveMessageInput{
 			QueueUrl:            aws.String(queuestring),
 			MaxNumberOfMessages: 10,
-			WaitTimeSeconds:     5,
+			WaitTimeSeconds:     1,
 		}
 		resp, err := sqsClient.ReceiveMessage(ctx, recieveMessages)
 		if err != nil {
@@ -35,6 +35,8 @@ func StartConsume(queuestring string,ctx context.Context) {
 		}
 		for _, message := range resp.Messages {
 			// fmt.Println(*message.Body)
+			fmt.Println("gjnjdmnjgvfkmdgnjvfkmdmdecfmdcfdnfvhjdfccfm")
+			fmt.Println(*message.Body)
 			services.ParseCSV(*message.Body,ctx)
 
 			_, err := sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
@@ -48,7 +50,7 @@ func StartConsume(queuestring string,ctx context.Context) {
 				fmt.Println("Message deleted")
 			}
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 
 	}
 

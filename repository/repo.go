@@ -2,17 +2,26 @@ package repository
 
 import (
 	"context"
+	"oms_service/database"
 	"oms_service/orders/requests"
-	"oms_service/orders/responses"
+	// "oms_service/orders/responses"
+	"time"
 	// "github.com/gin-gonic/gin"
 	// "github.com/omniful/go_commons/exchange_rate/responses"
 )
-type OrderService interface {
-	CreateOrder(c context.Context, request *requests.CreateOrderSvcRequest) (*responses.CreateOrderSvcResponse,error)
+type OrderService struct{
+	
 }
 
+func CreateOrder(c context.Context,order *requests.Order)(error){
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-func CreateOrder(c context.Context,svcReq *requests.CreateOrderSvcRequest){
+	collection := database.DB.Database("OMS_servicee").Collection("orders")
+
+	_, err := collection.InsertOne(ctx, order)
+	return err
+
 
 
 }

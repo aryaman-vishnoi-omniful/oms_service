@@ -19,7 +19,7 @@ import (
 
 	// "github.com/omniful/go_commons/csv"
 	error2 "github.com/omniful/go_commons/error"
-	oresponse "github.com/omniful/go_commons/response"
+	// oresponse "github.com/omniful/go_commons/response"
 	"github.com/omniful/go_commons/sqs"
 	// commonError "github.com/omniful/go_commons/error"
 )
@@ -45,22 +45,23 @@ func (tc *Controller) CreateOrder(c *gin.Context) {
 		return
 
 	}
-	svcRequest, err := convertControllerReqToServiceReqCreateOrder(c, createOrderReq)
-	if err != nil {
-		// tenantError.NewErrorResponse(c, cusErr
-		log.Fatal(err.Error())
-		return
-	}
+	// svcRequest, err := convertControllerReqToServiceReqCreateOrder(c, createOrderReq)
+	// if err != nil {
+	// 	// tenantError.NewErrorResponse(c, cusErr
+	// 	log.Fatal(err.Error())
+	// 	return
+	// }
 
-	svcResponse, err := tc.OrderService.CreateOrder(c, svcRequest)
-	if err != nil {
-		// tenantError.NewErrorResponse(c, cusErr)
-		log.Fatal(err.Error())
-		return
-	}
+	// svcResponse, err := repository.CreateOrder(c, svcRequest)
+	// if err != nil {
+	// 	// tenantError.NewErrorResponse(c, cusErr)
+	// 	log.Fatal(err.Error())
+	// 	return
+	// }
+	// return
 
-	response := convertServiceRespToControllerRespCreateOrder(svcResponse)
-	oresponse.NewSuccessResponse(c, response)
+	// response := convertServiceRespToControllerRespCreateOrder(svcResponse)
+	// oresponse.NewSuccessResponse(c, response)
 
 }
 func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context) {
@@ -123,6 +124,7 @@ func convertControllerReqToServiceReqCreateOrder(ctx *gin.Context, createOrderRe
 
 	return
 }
+
 
 func convertServiceRespToControllerRespCreateOrder(resp *responses.CreateOrderSvcResponse) *responses.CreateOrderCtrlResponse {
 	return &responses.CreateOrderCtrlResponse{

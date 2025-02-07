@@ -4,8 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	kafka_producer "oms_service/kafka"
 	"oms_service/orders/requests"
+
+	// "oms_service/orders/services"
+	"oms_service/repository"
 	"os"
 	"strconv"
 	"time"
@@ -39,6 +43,8 @@ func SendMessage(ctx context.Context, message *sqs.Message) {
 	if err != nil {
 		log.Fatal("did not publish", err)
 	}
+	fmt.Println("pushed to queue")
+	
 
 }
 
@@ -46,6 +52,30 @@ func SendMessage(ctx context.Context, message *sqs.Message) {
 //		FilePath string
 //		UserID   string
 //	}
+
+const wmsBaseURL = "http://localhost:8000/wms/v1" // Change to actual WMS service URL
+
+func validateSKUAndHub(ctx context.Context, order *requests.Order) error {
+	client := &http.Client{}
+
+	for _, item := range order.OrderItems {
+		
+		skuURL := fmt.Sprintf("%s/getSkuById/%s", wmsBaseURL, item.SKUID)
+		skuResp, err := client.Get(skuURL)
+		if err != nil || skuResp.StatusCode != http.StatusOK {
+			return fmt.Errorf("invalid SKU ID: %s", item.SKUID)
+		}
+
+	
+		hubURL := fmt.Sprintf("%s/getHub/%s", wmsBaseURL,item.HubId)
+		hubResp, err := client.Get(hubURL)
+		if err != nil || hubResp.StatusCode != http.StatusOK {
+			return fmt.Errorf("invalid Hub ID: %s", item.HubId)
+		}
+	}
+
+	return nil
+}
 func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) error {
 	// Marshal the order's items to JSON. (Change to marshal the entire order if desired.)
 	msg, err := json.Marshal(order.OrderItems)
@@ -72,6 +102,7 @@ func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) e
 	}
 
 	return nil
+
 }
 func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	file, err := os.Open(filePath)
@@ -104,6 +135,7 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read CSV batch: %w", err)
 		}
+
 
 		fmt.Println("Processing records:")
 		fmt.Println(records)
@@ -153,10 +185,10 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 		orders = append(orders, order)
 	}
 
-	fmt.Println("Final orders:")
-	for _, order := range orders {
-		fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
-	}
+	// fmt.Println("Final orders:")
+	// for _, order := range orders {
+	// 	fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
+	// }
 
 	return orders, nil
 }
@@ -166,9 +198,18 @@ func ParseCSV(filePath string, ctx context.Context) {
 		fmt.Printf("\nFailed to parse CSV (%s): %v\n", filePath, err)
 		return
 	}
-	
-	// Publish each order to Kafka
+
 	for _, order := range orders {
+		if err := validateSKUAndHub(ctx, order); err != nil {
+			fmt.Printf("Validation failed for order %s: %v\n", order.OrderNo, err)
+			continue
+		}
+
+		err := repository.CreateOrder(ctx, order)
+		if err != nil {
+			log.Fatalf("Could not create order %s: %v", order.OrderNo, err)
+		}
+
 		if err := PushCreateOrderMessageToKafka(ctx, order); err != nil {
 			fmt.Printf("Failed to publish order %s: %v\n", order.OrderNo, err)
 		} else {
@@ -180,16 +221,17 @@ func ParseCSV(filePath string, ctx context.Context) {
 func ConvertControllerReqToServiceReqParseCsv(ctx context.Context, CreateBulkCsv *requests.CSVUploadRequest) (string, error) {
 
 	message := &sqs.Message{
-		GroupId:         "csv-163",
+		GroupId:         "csv-1665",
 		Value:           []byte(CreateBulkCsv.FilePath),
-		ReceiptHandle:   "order-csv3",
-		DeduplicationId: "dedup-490",
+		ReceiptHandle:   "order-csv8",
+		// DeduplicationId: "dedup-499",
 		DelayDuration:   0,
 		Headers: map[string]string{
 			"customer_id": CreateBulkCsv.CustomerId,
 		},
 	}
 	SendMessage(ctx, message)
+	
 
 	log.Println("Message sent successfully to SQS")
 	return "", nil

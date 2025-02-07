@@ -31,7 +31,8 @@ type CreateOrderCtrlRequest struct {
 }
 
 type OrderItem struct {
-	OrderID  string`bson:"order_id"`
+	HubId    string `bson:"hub_id"`
+	OrderID  string `bson:"order_id"`
 	SKUID    string `bson:"sku_id,omitempty" json:"sku_id" `
 	Quantity int    `bson:"quantity" json:"quantity"   `
 }
