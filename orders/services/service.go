@@ -77,7 +77,6 @@ func validateSKUAndHub(ctx context.Context, order *requests.Order) error {
 	return nil
 }
 func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) error {
-	// Marshal the order's items to JSON. (Change to marshal the entire order if desired.)
 	msg, err := json.Marshal(order.OrderItems)
 	if err != nil {
 		return fmt.Errorf("unable to marshal order items: %w", err)
@@ -87,7 +86,6 @@ func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) e
 		"event": "order_created",
 	}
 
-	// Use OrderNo as the Kafka partition key. (Alternatively, you can use order.ID.String())
 	key := order.OrderNo
 
 	p := kafka_producer.Get()
@@ -111,10 +109,7 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	}
 	defer file.Close()
 
-	// Map to group items by order_no and customer_name
 	ordermap := make(map[string]*requests.Order)
-
-	// Initialize the CSV reader (using your CSV package and options)
 	Csv, err := csv.NewCommonCSV(
 		csv.WithBatchSize(100),
 		csv.WithSource(csv.Local),
@@ -128,8 +123,6 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	if err = Csv.InitializeReader(context.TODO()); err != nil {
 		return nil, fmt.Errorf("failed to initialize CSV reader: %v", err)
 	}
-
-	// Process the records and group them by order_no and customer_name
 	for !Csv.IsEOF() {
 		records, err := Csv.ReadNextBatch()
 		if err != nil {
@@ -140,22 +133,19 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 		fmt.Println("Processing records:")
 		fmt.Println(records)
 		for _, record := range records {
-			orderNo := record[0]      // order_no
-			customerName := record[1] // customer_name
-			skuID := record[2]        // sku_id
-			quantityStr := record[3]  // quantity
+			orderNo := record[0]      
+			customerName := record[1] 
+			skuID := record[2]       
+			quantityStr := record[3]  
 
-			// Convert quantity to integer
 			quantity, err := strconv.Atoi(quantityStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid quantity %s: %v", quantityStr, err)
 			}
 
-			// Group by a key (order_no-customer_name)
 			orderKey := fmt.Sprintf("%s-%s", orderNo, customerName)
 			order, exists := ordermap[orderKey]
 			if !exists {
-				// Create a new order if it doesn't exist
 				now := primitive.NewDateTimeFromTime(time.Now())
 				order = &requests.Order{
 					ID:           primitive.NewObjectID(),
@@ -169,26 +159,23 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 				ordermap[orderKey] = order
 			}
 
-			// Create an OrderItem for this record
 			orderItem := requests.OrderItem{
-				OrderID: orderNo, // or order.ID.String(), depending on your schema
+				OrderID: orderNo, 
 				SKUID:   skuID,
 				Quantity: quantity,
 			}
 			order.OrderItems = append(order.OrderItems, orderItem)
 		}
 	}
-
-	// Convert the map of orders into a slice
 	var orders []*requests.Order
 	for _, order := range ordermap {
 		orders = append(orders, order)
 	}
 
-	// fmt.Println("Final orders:")
-	// for _, order := range orders {
-	// 	fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
-	// }
+	fmt.Println("Final orders:")
+	for _, order := range orders {
+		fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
+	}
 
 	return orders, nil
 }
@@ -200,10 +187,10 @@ func ParseCSV(filePath string, ctx context.Context) {
 	}
 
 	for _, order := range orders {
-		if err := validateSKUAndHub(ctx, order); err != nil {
-			fmt.Printf("Validation failed for order %s: %v\n", order.OrderNo, err)
-			continue
-		}
+		// if err := validateSKUAndHub(ctx, order); err != nil {
+		// 	fmt.Printf("Validation failed for order %s: %v\n", order.OrderNo, err)
+		// 	continue
+		// }
 
 		err := repository.CreateOrder(ctx, order)
 		if err != nil {

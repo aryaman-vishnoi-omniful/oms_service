@@ -137,6 +137,6 @@ func InitializeKafka(ctx context.Context) {
 	// fmt.Println("Initialized kafka producer").
 	fmt.Println("Initialized Kafka Producer")
 	kafka_producer.Set(producer)
-	go listners.StartConsumer(ctx)
+	go listners.InitializeKafkaConsumer(ctx)
 
 }

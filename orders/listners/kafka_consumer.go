@@ -2,49 +2,60 @@ package listners
 
 import (
 	"context"
-	"log"
+	"encoding/json"
+	"oms_service/orders/requests"
 
-	"github.com/IBM/sarama"
+	// "oms-service/r"
+	"time"
+
 	"github.com/omniful/go_commons/config"
+	"github.com/omniful/go_commons/kafka"
+	"github.com/omniful/go_commons/log"
+	"github.com/omniful/go_commons/pubsub"
 )
 
-func StartConsumer(ctx context.Context) {
-	brokers := []string{"localhost:9092"} // Replace with your Kafka broker addresses
-	topic := config.GetString(ctx, "consumers.orders.topic")
+// Implement message handler
+type MessageHandler struct{}
 
-	config := sarama.NewConfig()
-	config.Consumer.Return.Errors = true
+// Process implements pubsub.IPubSubMessageHandler.
+func (h *MessageHandler) Process(ctx context.Context, message *pubsub.Message) error {
+	log.Printf("Received message: %s", string(message.Value))
 
-	consumer, err := sarama.NewConsumer(brokers, config)
+	var orders []requests.KafkaResponseOrderMessage 
+	err := json.Unmarshal(message.Value, &orders)
 	if err != nil {
-		log.Fatalf("Failed to start Kafka consumer: %v", err)
-	}
-	defer func() {
-		if err := consumer.Close(); err != nil {
-			log.Fatalf("Failed to close consumer: %v", err)
-		}
-	}()
-
-	partitions, err := consumer.Partitions(topic)
-	if err != nil {
-		log.Fatalf("Failed to get partitions: %v", err)
+		log.Printf("Failed to parse Kafka message: %v", err)
+		return err
 	}
 
-	for _, partition := range partitions {
-		pc, err := consumer.ConsumePartition(topic, partition, sarama.OffsetOldest)
-		if err != nil {
-			log.Fatalf("Failed to start consuming partition %d: %v", partition, err)
-		}
+	log.Printf("Parsed Kafka Order Messages: %+v", orders)
 
-		defer pc.Close()
-
-		go func(pc sarama.PartitionConsumer) {
-			for message := range pc.Messages() {
-				log.Printf("Consumed message: key = %s, value = %s, offset = %d\n",
-					string(message.Key), string(message.Value), message.Offset)
-			}
-		}(pc)
+	// Process each order
+	for _, order := range orders {
+		log.Printf("Processing Order: %+v", order)
+		
 	}
 
-	select {} // Block forever
+	return nil
+}
+
+
+func (h *MessageHandler) Handle(ctx context.Context, msg *pubsub.Message) error {
+	// Process message
+	return nil
+}
+
+// Initialize Kafka Consumer
+func InitializeKafkaConsumer(ctx context.Context) {
+	consumer := kafka.NewConsumer(
+		kafka.WithBrokers([]string{"localhost:9092"}),
+		kafka.WithConsumerGroup("my-consumer-group"),
+		kafka.WithClientID("my-consumer"),
+		kafka.WithKafkaVersion("2.8.1"),
+		kafka.WithRetryInterval(time.Second),
+	)
+
+	handler := &MessageHandler{}
+	consumer.RegisterHandler(config.GetString(ctx, "consumers.orders.topic"), handler)
+	consumer.Subscribe(ctx)
 }

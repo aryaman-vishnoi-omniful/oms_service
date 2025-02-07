@@ -48,3 +48,10 @@ type Order struct {
 	UpdatedAt    primitive.DateTime  `bson:"updated_at,omitempty" json:"updated_at"`
 	DeletedAt    *primitive.DateTime `bson:"deleted_at,omitempty" json:"deleted_at" `
 }
+
+type KafkaResponseOrderMessage struct {
+	HubID           string `json:"HubId"`
+	OrderID         string `json:"OrderID"`
+	SKUID           string `json:"sku_id"`
+	QuantityOrdered int    `json:"quantity"`
+}
