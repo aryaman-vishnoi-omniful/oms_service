@@ -76,7 +76,7 @@ func (cs *CSVUploadController) CreateBulkCsv(ctx *gin.Context) {
 		return
 	}
 	_, err := services.ConvertControllerReqToServiceReqParseCsv(ctx, CSVUploadRequest)
-	if err != nil {
+	if err != nil {	
 		log.Fatal("didnt go to service")
 	}
 	// Csv, err := csv.NewCommonCSV(

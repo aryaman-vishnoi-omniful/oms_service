@@ -18,3 +18,9 @@ onlineKafka:
     - "localhost:9092"
   clientId: "order-service"
   version: 2.0.0
+consumers:
+  orders:
+    topic: "omniful.order-service.order.create-events"
+    groupId: "1"
+    enabled: false
+  

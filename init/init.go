@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"oms_service/database"
+	kafka_producer "oms_service/kafka"
 
 	// "oms_service/orders"
 	"oms_service/orders/listners"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/omniful/go_commons/config"
+	"github.com/omniful/go_commons/kafka"
+
 	// "github.com/omniful/go_commons/kafka"
 
 	// "github.com/omniful/go_commons/kafka"
@@ -41,7 +44,7 @@ if err!=nil{
 func Initialize(ctx context.Context) {
 	InitializeRedis(ctx)
 	InitializeDB(ctx)
-	// InitializeKafka(ctx)
+	InitializeKafka(ctx)
 	InitializeSQS(ctx)
 	// return ctx
 }
@@ -117,5 +120,20 @@ func InitializeSQS(ctx context.Context){
 
 
 
+
+}
+
+func InitializeKafka(ctx context.Context) {
+	kafkaBrokers := config.GetStringSlice(ctx, "onlineKafka.brokers")
+	kafkaClientID := config.GetString(ctx, "onlineKafka.clientId")
+	kafkaVersion := config.GetString(ctx, "onlineKafka.version")
+	producer := kafka.NewProducer(
+		kafka.WithBrokers(kafkaBrokers),
+		kafka.WithClientID(kafkaClientID),
+		kafka.WithKafkaVersion(kafkaVersion),
+	)
+	// fmt.Println("Initialized kafka producer")
+	fmt.Println("Initialized Kafka Producer")
+	kafka_producer.Set(producer)
 
 }

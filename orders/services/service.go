@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	kafka_producer "oms_service/kafka"
 	"oms_service/orders/requests"
 	"os"
 	"strconv"
@@ -15,7 +17,10 @@ import (
 	"log"
 
 	// "github.com/gin-gonic/gin"
+	// "github.com/gin-gonic/gin"
+	"github.com/omniful/go_commons/config"
 	"github.com/omniful/go_commons/csv"
+	"github.com/omniful/go_commons/pubsub"
 	"github.com/omniful/go_commons/sqs"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -24,31 +29,50 @@ var NewProducer = &sqs.Publisher{}
 
 // var Queue_instance =&sqs.Queue{}
 
-
 func SetProducer(ctx context.Context, queue *sqs.Queue) {
 	NewProducer = sqs.NewPublisher(queue)
-	// ok := "papa"
-	// jd, _ := json.Marshal(ok/)
-	// newmessage:=NewProducer.Publish(ctx,)
-	
 
-	// fmt.Println(NewProducer)
-
-	// Queue_instance=queue
-	// go listners.StartConsume()
 }
-func SendMessage(ctx context.Context,message *sqs.Message){
-	
-	err := NewProducer.Publish(ctx,message)
+func SendMessage(ctx context.Context, message *sqs.Message) {
+
+	err := NewProducer.Publish(ctx, message)
 	if err != nil {
 		log.Fatal("did not publish", err)
 	}
 
 }
-// type CSVUploadRequest struct {
-// 	FilePath string
-// 	UserID   string
-// }
+
+//	type CSVUploadRequest struct {
+//		FilePath string
+//		UserID   string
+//	}
+func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) error {
+	// Marshal the order's items to JSON. (Change to marshal the entire order if desired.)
+	msg, err := json.Marshal(order.OrderItems)
+	if err != nil {
+		return fmt.Errorf("unable to marshal order items: %w", err)
+	}
+
+	headers := map[string]string{
+		"event": "order_created",
+	}
+
+	// Use OrderNo as the Kafka partition key. (Alternatively, you can use order.ID.String())
+	key := order.OrderNo
+
+	p := kafka_producer.Get()
+	publishErr := p.Publish(ctx, &pubsub.Message{
+		Topic:   config.GetString(ctx, "consumers.orders.topic"),
+		Value:   msg,
+		Key:     key,
+		Headers: headers,
+	})
+	if publishErr != nil {
+		return fmt.Errorf("could not publish order %s to Kafka: %w", order.OrderNo, publishErr)
+	}
+
+	return nil
+}
 func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -57,9 +81,9 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	defer file.Close()
 
 	// Map to group items by order_no and customer_name
-	ordermap:= make(map[string]*requests.Order)
+	ordermap := make(map[string]*requests.Order)
 
-	// Initialize the CSV reader (based on your previous implementation)
+	// Initialize the CSV reader (using your CSV package and options)
 	Csv, err := csv.NewCommonCSV(
 		csv.WithBatchSize(100),
 		csv.WithSource(csv.Local),
@@ -70,17 +94,15 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize CSV reader: %v", err)
 	}
-	err = Csv.InitializeReader(context.TODO())
-	if err != nil {
+	if err = Csv.InitializeReader(context.TODO()); err != nil {
 		return nil, fmt.Errorf("failed to initialize CSV reader: %v", err)
 	}
 
 	// Process the records and group them by order_no and customer_name
 	for !Csv.IsEOF() {
-		var records csv.Records
 		records, err := Csv.ReadNextBatch()
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to read CSV batch: %w", err)
 		}
 
 		fmt.Println("Processing records:")
@@ -97,33 +119,34 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 				return nil, fmt.Errorf("invalid quantity %s: %v", quantityStr, err)
 			}
 
-			// Check if the order group for this order_no and customer_name already exists
+			// Group by a key (order_no-customer_name)
 			orderKey := fmt.Sprintf("%s-%s", orderNo, customerName)
 			order, exists := ordermap[orderKey]
 			if !exists {
-				// If order doesn't exist, create a new order
+				// Create a new order if it doesn't exist
 				now := primitive.NewDateTimeFromTime(time.Now())
 				order = &requests.Order{
-					ID: primitive.NewObjectID(),
+					ID:           primitive.NewObjectID(),
 					CustomerName: customerName,
 					OrderNo:      orderNo,
-					OrderItems:   []requests.OrderItem{}, 
+					OrderItems:   []requests.OrderItem{},
 					Status:       "on_hold",
 					CreatedAt:    now,
 					UpdatedAt:    now,
 				}
-				
 				ordermap[orderKey] = order
 			}
 
+			// Create an OrderItem for this record
 			orderItem := requests.OrderItem{
-				SKUID:    skuID,
+				OrderID: orderNo, // or order.ID.String(), depending on your schema
+				SKUID:   skuID,
 				Quantity: quantity,
 			}
 			order.OrderItems = append(order.OrderItems, orderItem)
 		}
 	}
-  
+
 	// Convert the map of orders into a slice
 	var orders []*requests.Order
 	for _, order := range ordermap {
@@ -137,27 +160,24 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 
 	return orders, nil
 }
-
-func ParseCSV(filePath string) {
+func ParseCSV(filePath string, ctx context.Context) {
 	orders, err := ExtractFromCsv(filePath)
 	if err != nil {
-		// c.JSON(500, gin.H{"error": err.Error()})
-		fmt.Println("\nfailed to parse csv with path : ", filePath)
+		fmt.Printf("\nFailed to parse CSV (%s): %v\n", filePath, err)
 		return
 	}
-	fmt.Println(orders)
-
-	// Store each order in MongoDB (optional, depending on the flow)
-	// for _, order := range orders {
-	// 	if err := storeOrder(order); err != nil {
-	// 		fmt.Print("\nparseCSV : falied to save order")
-	// 		return
-	// 	}
-	// }
-
+	
+	// Publish each order to Kafka
+	for _, order := range orders {
+		if err := PushCreateOrderMessageToKafka(ctx, order); err != nil {
+			fmt.Printf("Failed to publish order %s: %v\n", order.OrderNo, err)
+		} else {
+			fmt.Printf("Published order %s successfully\n", order.OrderNo)
+		}
+	}
 }
 
-func ConvertControllerReqToServiceReqParseCsv(ctx context.Context,CreateBulkCsv *requests.CSVUploadRequest)(string,error){
+func ConvertControllerReqToServiceReqParseCsv(ctx context.Context, CreateBulkCsv *requests.CSVUploadRequest) (string, error) {
 
 	message := &sqs.Message{
 		GroupId:         "csv-163",
@@ -170,10 +190,8 @@ func ConvertControllerReqToServiceReqParseCsv(ctx context.Context,CreateBulkCsv 
 		},
 	}
 	SendMessage(ctx, message)
-	
 
 	log.Println("Message sent successfully to SQS")
-	return "",nil
-
+	return "", nil
 
 }

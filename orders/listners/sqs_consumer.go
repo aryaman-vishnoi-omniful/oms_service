@@ -35,7 +35,7 @@ func StartConsume(queuestring string,ctx context.Context) {
 		}
 		for _, message := range resp.Messages {
 			// fmt.Println(*message.Body)
-			services.ParseCSV(*message.Body)
+			services.ParseCSV(*message.Body,ctx)
 
 			_, err := sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 				QueueUrl:      aws.String(queuestring),
