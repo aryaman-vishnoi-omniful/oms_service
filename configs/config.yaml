@@ -6,7 +6,7 @@ service:
   name: "order_service"
 
 mongo:
-  string: "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.3.7"
+  string: "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.3.8"
 
 redis:
   clusterMode: false

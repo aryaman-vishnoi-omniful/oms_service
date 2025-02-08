@@ -18,7 +18,7 @@ func CreateOrder(c context.Context,order *requests.Order)(error){
 	defer cancel()
 
 	collection := database.DB.Database("OMS_servicee").Collection("orders")
-
+	
 	_, err := collection.InsertOne(ctx, order)
 	return err
 

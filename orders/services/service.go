@@ -1,10 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+
+	// "net/http"
 	kafka_producer "oms_service/kafka"
 	"oms_service/orders/requests"
 
@@ -13,6 +15,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/omniful/go_commons/http"
 
 	// "oms_service/orders/listners"
 	// "time"
@@ -24,6 +28,7 @@ import (
 	// "github.com/gin-gonic/gin"
 	"github.com/omniful/go_commons/config"
 	"github.com/omniful/go_commons/csv"
+	interservice_client "github.com/omniful/go_commons/interservice-client"
 	"github.com/omniful/go_commons/pubsub"
 	"github.com/omniful/go_commons/sqs"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -44,7 +49,6 @@ func SendMessage(ctx context.Context, message *sqs.Message) {
 		log.Fatal("did not publish", err)
 	}
 	fmt.Println("pushed to queue")
-	
 
 }
 
@@ -53,28 +57,52 @@ func SendMessage(ctx context.Context, message *sqs.Message) {
 //		UserID   string
 //	}
 
-const wmsBaseURL = "http://localhost:8000/wms/v1" // Change to actual WMS service URL
+// const BaseURL = "http://localhost:8081/wms/v1"
 
-func validateSKUAndHub(ctx context.Context, order *requests.Order) error {
-	client := &http.Client{}
+func validateSKU(skuID int) bool {
+	skustr := strconv.Itoa(int(skuID))
 
-	for _, item := range order.OrderItems {
-		
-		skuURL := fmt.Sprintf("%s/getSkuById/%s", wmsBaseURL, item.SKUID)
-		skuResp, err := client.Get(skuURL)
-		if err != nil || skuResp.StatusCode != http.StatusOK {
-			return fmt.Errorf("invalid SKU ID: %s", item.SKUID)
-		}
-
-	
-		hubURL := fmt.Sprintf("%s/getHub/%s", wmsBaseURL,item.HubId)
-		hubResp, err := client.Get(hubURL)
-		if err != nil || hubResp.StatusCode != http.StatusOK {
-			return fmt.Errorf("invalid Hub ID: %s", item.HubId)
-		}
+	config := interservice_client.Config{
+		ServiceName: "order-service",
+		BaseURL:     "http://localhost:8081/wms/v1/getSkuById/",
+		Timeout:     2 * time.Second,
 	}
 
-	return nil
+	client, err := interservice_client.NewClientWithConfig(config)
+	if err != nil {
+		return false
+	}
+
+	makeurl := config.BaseURL + skustr
+	body := map[string]string{
+		// "hub_id": "",
+		"skus": "",
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return false
+	}
+
+	req := &http.Request{
+		Url:     makeurl, // Use configured URL
+		Body:    bytes.NewReader(bodyBytes),
+		Timeout: 7 * time.Second,
+		Headers: map[string][]string{
+			"Content-Type": {"application/json"},
+		},
+	}
+	resp,_ := client.Get(req, "/")
+	// if interSvcErr != nil {
+	// 	log.Printf("Some InterSvcError: %+v", interSvcErr)
+	// 	return !interSvcErr.StatusCode.Is4xx()
+	// }
+	if resp==nil{
+		return false
+	}
+	return resp.IsSuccess()
+
+	
+
 }
 func PushCreateOrderMessageToKafka(ctx context.Context, order *requests.Order) error {
 	msg, err := json.Marshal(order.OrderItems)
@@ -129,14 +157,35 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 			return nil, fmt.Errorf("failed to read CSV batch: %w", err)
 		}
 
-
-		fmt.Println("Processing records:")
-		fmt.Println(records)
+		// fmt.Println("Processing records:")
+		// fmt.Println(records)
 		for _, record := range records {
-			orderNo := record[0]      
-			customerName := record[1] 
-			skuID := record[2]       
-			quantityStr := record[3]  
+			orderNo := record[0]
+			customerName := record[1]
+			skuIDStr := record[2]
+			hubIDStr := record[3]
+			quantityStr := record[4]
+			skuID, err := strconv.Atoi(skuIDStr)
+			if err != nil {
+				fmt.Println("invalid sku_id", skuIDStr, ":", err)
+				continue
+			}
+			// hubID, err := strconv.Atoi(hubIDStr)
+			// if err != nil {
+			// 	fmt.Println("invalid sku_id", hubIDStr, ":", err)
+			// 	continue
+			// }
+
+			if !validateSKU(skuID) {
+				fmt.Println("/n")
+				fmt.Println("/n")
+				fmt.Println("/n")
+				fmt.Println("sku -> ", skuIDStr, "doesn't exists")
+				fmt.Println("/n")
+				fmt.Println("/n")
+				fmt.Println("/n")
+				continue
+			}
 
 			quantity, err := strconv.Atoi(quantityStr)
 			if err != nil {
@@ -160,8 +209,9 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 			}
 
 			orderItem := requests.OrderItem{
-				OrderID: orderNo, 
-				SKUID:   skuID,
+				HubId:    hubIDStr,
+				OrderID:  orderNo,
+				SKUID:    skuIDStr,
 				Quantity: quantity,
 			}
 			order.OrderItems = append(order.OrderItems, orderItem)
@@ -173,9 +223,9 @@ func ExtractFromCsv(filePath string) ([]*requests.Order, error) {
 	}
 
 	fmt.Println("Final orders:")
-	for _, order := range orders {
-		fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
-	}
+	// for _, order := range orders {
+	// 	fmt.Printf("Order No: %s, Customer: %s, Total Items: %d\n", order.OrderNo, order.CustomerName, len(order.OrderItems))
+	// }
 
 	return orders, nil
 }
@@ -187,16 +237,17 @@ func ParseCSV(filePath string, ctx context.Context) {
 	}
 
 	for _, order := range orders {
-		// if err := validateSKUAndHub(ctx, order); err != nil {
-		// 	fmt.Printf("Validation failed for order %s: %v\n", order.OrderNo, err)
-		// 	continue
-		// }
 
 		err := repository.CreateOrder(ctx, order)
 		if err != nil {
 			log.Fatalf("Could not create order %s: %v", order.OrderNo, err)
 		}
-
+		fmt.Println("/n")
+		fmt.Println("/n")
+		fmt.Println("/n")
+		fmt.Println("huaa kya")
+		fmt.Println("/n")
+		fmt.Println("/n")
 		if err := PushCreateOrderMessageToKafka(ctx, order); err != nil {
 			fmt.Printf("Failed to publish order %s: %v\n", order.OrderNo, err)
 		} else {
@@ -208,17 +259,16 @@ func ParseCSV(filePath string, ctx context.Context) {
 func ConvertControllerReqToServiceReqParseCsv(ctx context.Context, CreateBulkCsv *requests.CSVUploadRequest) (string, error) {
 
 	message := &sqs.Message{
-		GroupId:         "csv-1665",
-		Value:           []byte(CreateBulkCsv.FilePath),
-		ReceiptHandle:   "order-csv8",
+		GroupId:       "csv-1665",
+		Value:         []byte(CreateBulkCsv.FilePath),
+		ReceiptHandle: "order-csv8",
 		// DeduplicationId: "dedup-499",
-		DelayDuration:   0,
+		DelayDuration: 0,
 		Headers: map[string]string{
 			"customer_id": CreateBulkCsv.CustomerId,
 		},
 	}
 	SendMessage(ctx, message)
-	
 
 	log.Println("Message sent successfully to SQS")
 	return "", nil
